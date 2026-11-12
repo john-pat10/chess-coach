@@ -37,8 +37,39 @@ class OpeningNode:
             "name": self.name,
         }
         if include_children:
-            d["children"] = [c.to_dict(include_children=False) for c in self.children.values()]
+            kids = sorted(self.children.values(), key=lambda c: -c.size())
+            d["children"] = []
+            for c in kids:
+                child = c.to_dict(include_children=False)
+                label = c.first_named()
+                child["lines"] = c.size()                         # named openings at or below this move
+                child["label"] = label.name if label else None    # what this move leads to
+                d["children"].append(child)
         return d
+
+    def size(self) -> int:
+        """How many named openings sit at or below this node -- a rough
+        stand-in for how much theory (and so how much play) a move sees."""
+        cached = getattr(self, "_size", None)
+        if cached is None:
+            cached = (1 if self.name else 0) + sum(c.size() for c in self.children.values())
+            self._size = cached
+        return cached
+
+    def first_named(self, min_depth: int = 0) -> Optional["OpeningNode"]:
+        """The shallowest named opening at or below this node (breadth-first),
+        optionally at least `min_depth` moves further on. Among equally deep
+        candidates, the one with the most theory beneath it wins."""
+        level = [self]
+        depth = 0
+        while level:
+            if depth >= min_depth:
+                named = [n for n in level if n.name]
+                if named:
+                    return max(named, key=lambda n: n.size())
+            level = [c for n in level for c in n.children.values()]
+            depth += 1
+        return None
 
 
 class OpeningBook:
@@ -47,6 +78,7 @@ class OpeningBook:
         self._by_eco: Dict[str, List[OpeningNode]] = {}
         self._all_named: List[OpeningNode] = []
         self._moves_by_key: Dict[str, List[str]] = {}   # "ECO|Name" -> [uci, uci, ...]
+        self._pgn_by_key: Dict[str, str] = {}           # "ECO|Name" -> "1. e4 e5 2. Nf3"
         self._load()
 
     def _load(self):
@@ -87,6 +119,7 @@ class OpeningBook:
         self._all_named.append(node)
         self._by_eco.setdefault(eco, []).append(node)
         self._moves_by_key[f"{eco}|{name}"] = uci_moves
+        self._pgn_by_key[f"{eco}|{name}"] = pgn_moves
 
     def classify(self, uci_moves: List[str]) -> Optional[dict]:
         """Walk a game's moves and return the deepest {eco, name, ply} match."""
@@ -116,16 +149,23 @@ class OpeningBook:
         return self._moves_by_key.get(f"{eco}|{name}")
 
     def search(self, query: str, limit: int = 25) -> List[dict]:
-        q = query.lower().strip()
-        if not q:
+        """Every word of the query must appear in the name or ECO code, so
+        "dragon sicilian" and "B70" both work. Shorter lines come first."""
+        words = query.lower().split()
+        if not words:
             return []
-        out = []
+        hits = []
         for node in self._all_named:
-            if node.name and q in node.name.lower():
-                out.append({"eco": node.eco, "name": node.name})
-                if len(out) >= limit:
-                    break
-        return out
+            if all(w in f"{node.name} {node.eco}".lower() for w in words):
+                key = f"{node.eco}|{node.name}"
+                hits.append({
+                    "eco": node.eco,
+                    "name": node.name,
+                    "pgn": self._pgn_by_key.get(key, ""),
+                    "plies": len(self._moves_by_key.get(key, [])),
+                })
+        hits.sort(key=lambda h: (h["plies"], h["name"]))
+        return hits[:limit]
 
 
 _book: Optional[OpeningBook] = None

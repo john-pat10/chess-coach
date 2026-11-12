@@ -1,0 +1,11 @@
+services:
+  chess-coach:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"   # only reachable from this computer
+    volumes:
+      - chess-coach-data:/data   # your repertoire survives rebuilds
+    restart: unless-stopped
+
+volumes:
+  chess-coach-data:

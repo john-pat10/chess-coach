@@ -6,6 +6,7 @@ our own opening tree instead of a paid API.
 from __future__ import annotations
 
 import io
+import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -43,7 +44,8 @@ def fetch_lichess_pgns(username: str, max_games: int = 100, timeout: float = 30.
         raise ScoutingError(f"No Lichess account found for '{username}'.")
     if resp.status_code == 429:
         raise ScoutingError("Lichess rate-limited this request -- wait a bit and try again.")
-    resp.raise_for_status()
+    if resp.status_code >= 400:
+        raise ScoutingError(f"Lichess returned an error ({resp.status_code}) -- try again in a moment.")
     text = resp.text.strip()
     if not text:
         return []
@@ -60,7 +62,10 @@ def fetch_chesscom_pgns(username: str, max_games: int = 100, timeout: float = 30
             resp = client.get(archives_url, headers=headers)
             if resp.status_code == 404:
                 raise ScoutingError(f"No chess.com account found for '{username}'.")
-            resp.raise_for_status()
+            if resp.status_code == 429:
+                raise ScoutingError("chess.com rate-limited this request -- wait a bit and try again.")
+            if resp.status_code >= 400:
+                raise ScoutingError(f"chess.com returned an error ({resp.status_code}) -- try again in a moment.")
             archive_urls = resp.json().get("archives", [])
             archive_urls = list(reversed(archive_urls))  # most recent month first
 
@@ -77,7 +82,7 @@ def fetch_chesscom_pgns(username: str, max_games: int = 100, timeout: float = 30
                         pgns.append(pgn)
                     if len(pgns) >= max_games:
                         break
-    except httpx.HTTPError as e:
+    except (httpx.HTTPError, ValueError) as e:
         raise ScoutingError(f"Could not reach chess.com: {e}") from e
     return pgns[:max_games]
 
@@ -116,6 +121,9 @@ def _subject_score(result: str, subject_is_white: bool) -> Optional[float]:
 
 def build_scouting_report(platform: str, username: str, max_games: int = 100) -> dict:
     platform = platform.lower()
+    username = username.strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{2,30}", username):
+        raise ScoutingError("That doesn't look like a valid username (letters, numbers, - and _ only).")
     if platform == "lichess":
         pgns = fetch_lichess_pgns(username, max_games=max_games)
     elif platform in ("chesscom", "chess.com"):

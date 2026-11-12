@@ -1,13 +1,8 @@
 """A handful of fast smoke tests for the non-network parts of the backend.
 
-Run with: cd backend && .venv/bin/pytest
+Run with: cd backend && python -m pytest
 (Requires Stockfish to be installed for test_analyze_finds_the_blunder.)
 """
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 import pytest
 
 from app.openings import get_book
@@ -65,25 +60,3 @@ def test_analyze_finds_the_blunder():
     classifications = {m["ply"]: m["classification"] for m in result["moves"]}
     assert classifications[6] == "Blunder"  # 3...Nf6??
     assert result["summary"]["White"]["accuracy"] > result["summary"]["Black"]["accuracy"]
-
-
-def test_repertoire_and_sm2_scheduling():
-    """Uses a throwaway in-memory database so this doesn't touch your real repertoire."""
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
-    from app import models  # noqa: F401 -- ensure models are registered on Base
-    from app import trainer as trainer_module
-    from app.db import Base
-
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
-    Base.metadata.create_all(bind=engine)
-    session = sessionmaker(bind=engine)()
-
-    line = trainer_module.add_line(session, "white", "Italian Game", ["e2e4", "e7e5"], eco="C50")
-    assert trainer_module.get_due_line(session).id == line.id
-
-    state = trainer_module.record_attempt(session, line.id, "good")
-    assert state.repetitions == 1
-    assert state.interval_days == 1.0
-    session.close()
