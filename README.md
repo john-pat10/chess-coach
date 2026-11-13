@@ -1,90 +1,60 @@
 # ChessCoach
 
-A personal chess-improvement app with three tools in one place:
+**Use it here: https://john-pat10.github.io/chess-coach/** (no install, no account)
 
-1. **Game Review** -- paste a PGN and get a chess.com-style walkthrough: every
+A personal chess-improvement app with four tools in one place:
+
+1. **Game Review**: paste a PGN and get a chess.com-style walkthrough. Every
    move is classified (Brilliant / Best / Excellent / Good / Book /
-   Inaccuracy / Mistake / Blunder), with plain-English commentary, an eval
-   graph, and the engine's suggested lines at the moments you went wrong.
-2. **Opponent Scout** -- enter a Lichess or chess.com username and it pulls
-   their public game history, classifies every game by opening (using a
-   3,800-line ECO opening database), and tells you which openings they
-   actually score worst in -- so you know what to steer the game into.
-3. **Openings Trainer** -- build a repertoire (manually, or straight from
+   Inaccuracy / Mistake / Blunder) with plain-English commentary, an eval
+   bar, accuracy scores, and the engine's suggested lines at the moments you
+   went wrong.
+2. **Analysis Board**: a Lichess-style board for free analysis.
+   - Move pieces for either side (drag or click) and see Stockfish's
+     evaluation and its top 1-5 lines update live, with a best-move arrow.
+     Click any move in an engine line to play it out.
+   - A variation tree: try side lines without losing the main line, step
+     through any branch, promote a variation, or delete from a move.
+   - Load a PGN (variations and comments are kept) or a FEN, then copy the
+     result back out as PGN or FEN.
+   - An opening explorer that names the opening and lists the book moves
+     from the current position, transpositions included.
+   - From Game Review, the **Analysis board** button opens the game at the
+     move you're looking at.
+   - Keys: ← → step, ↑ ↓ jump to start/end, `f` flips the board, `l`
+     toggles the engine. Your last analysis is saved between visits.
+3. **Opponent Scout**: enter a Lichess or chess.com username. It pulls their
+   public games, classifies every game by opening (from a 3,800-line ECO
+   opening database), and shows which openings they score worst in, so you
+   know what to steer the game into.
+4. **Openings Trainer**: build a repertoire (manually, or straight from
    Opponent Scout's recommendations) and drill it with spaced repetition
-   (the same SM-2 algorithm Anki uses), so lines you keep missing come back
+   (the SM-2 algorithm Anki uses), so lines you keep missing come back
    sooner.
 
-Analysis runs on a real [Stockfish](https://stockfishchess.org/) (open
-source, GPLv3) running locally on your machine -- nothing is sent to a
-third-party analysis service. The only network calls this app makes are to
-Lichess's and chess.com's own public, keyless APIs, to fetch a player's
-public games.
+## How it runs
 
-## Requirements
+Everything runs in your browser. There's no server:
 
-- Python 3.10+
-- Node.js 18+
-- Stockfish (see below)
+- **Stockfish 19** (the [stockfish.js](https://github.com/nmrugg/stockfish.js)
+  WASM build, GPLv3) runs in a Web Worker on your own device. It uses the
+  single-threaded "lite" build, which needs no special server setup, so the
+  whole app can be hosted as static files on GitHub Pages.
+- The only network calls are to Lichess's and chess.com's public, keyless
+  APIs, when you scout an opponent.
+- Your repertoire and review schedule are saved in your browser
+  (localStorage). Use **Download backup** / **Restore backup** on the
+  Openings Trainer page to move them to another browser or device.
 
-### Installing Stockfish
+## Running it locally
 
-- **macOS:** `brew install stockfish`
-- **Ubuntu/Debian:** `sudo apt install stockfish`
-- **Windows:** download the binary from
-  [stockfishchess.org/download](https://stockfishchess.org/download/) and
-  either add its folder to your PATH, or set the `STOCKFISH_PATH`
-  environment variable to the full path of `stockfish.exe`.
+You only need this if you want to change the code. Install
+[Node.js](https://nodejs.org/) 18+ and then:
 
-The backend looks for Stockfish on your PATH automatically; if it can't find
-it, copy `backend/.env.example` to `backend/.env` and set `STOCKFISH_PATH`
-to the full path of the executable -- it's loaded automatically on startup.
+- **Windows:** double-click `start.bat`
+- **macOS/Linux:** `./start.sh`
 
-## Quick start
-
-**Windows:** double-click `start.bat`. First run, it'll install everything
-it needs (this can take a minute or two); after that it opens two windows
-(backend + frontend) and your browser, straight to the app. If Python or
-Node aren't installed yet, it'll tell you exactly where to get them and stop
--- install those and double-click it again.
-
-A couple of Windows-specific things worth knowing:
-- If double-clicking does nothing or flashes and closes, right-click
-  `start.bat` and choose "Run as administrator" once, or open a Command
-  Prompt in this folder and run `start.bat` from there so you can see any
-  error message.
-- If you installed Python from the Microsoft Store, the `python` command
-  can sometimes silently fail to find real Python. If `start.bat` says
-  Python isn't found even though you're sure it's installed, reinstall from
-  [python.org](https://www.python.org/downloads/) instead and check "Add
-  python.exe to PATH".
-- To stop the app, just close the two windows it opened.
-- Prefer to run them separately? `backend\run_backend.bat` and
-  `frontend\run_frontend.bat` each do one half, and can be double-clicked on
-  their own once the first-time setup above has run once via `start.bat`.
-
-**macOS/Linux:**
-
-```bash
-./start.sh
-```
-
-Both platforms: this sets up the backend virtualenv and frontend
-dependencies on first run, then starts both. Open **http://localhost:5173**.
-
-## Manual setup
-
-**Backend** (in one terminal):
-
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
-
-**Frontend** (in another terminal):
+Or by hand:
 
 ```bash
 cd frontend
@@ -92,55 +62,56 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints (usually http://localhost:5173).
+Then open http://localhost:5173.
 
-## How it works
+## Publishing to GitHub Pages
+
+The workflow in `.github/workflows/deploy.yml` builds the app and publishes
+it on every push to `main`. One-time setup: in the repo, go to
+**Settings → Pages** and set **Source** to **GitHub Actions**. After the
+first run, the site is live at `https://<your-username>.github.io/chess-coach/`.
+
+## Project layout
 
 ```
-backend/
-  app/
-    engine.py      -- finds + talks to your local Stockfish (via python-chess)
-    eval_utils.py  -- centipawn <-> win% <-> accuracy% conversions (same
-                       formulas lichess's own analysis board uses)
-    analysis.py    -- runs a full game through Stockfish, classifies every
-                       move, and writes the natural-language commentary
-    openings.py    -- loads the bundled ECO opening database into a move
-                       trie, for both classifying games and browsing openings
-    opponent.py    -- Lichess / chess.com API clients + the scouting report
-    trainer.py     -- repertoire storage + SM-2 spaced-repetition scheduling
-    models.py/db.py-- SQLite (via SQLAlchemy) for your repertoire
-    main.py        -- FastAPI app tying it all together
-  data/*.tsv        -- lichess-org/chess-openings dataset (MIT licensed),
-                       ~3,800 named opening lines
 frontend/
-  src/pages/        -- the three tools (GameReview, OpponentScout, OpeningsTrainer)
-  src/components/   -- shared Board + EvalBar
-  src/api.js        -- talks to the backend REST API
+  src/
+    pages/          GameReview, AnalysisBoard, OpponentScout, OpeningsTrainer
+    components/     shared Board + EvalBar
+    lib/
+      engine.js     Stockfish in a Web Worker (UCI over postMessage)
+      analysis.js   runs a game through Stockfish, classifies every move,
+                    writes the commentary
+      evalUtils.js  centipawn <-> win% <-> accuracy% (lichess's formulas)
+      pgn.js        PGN reader/writer with variations, comments and clear
+                    errors for illegal moves
+      openings.js   the opening book: move trie + position index
+      opponent.js   Lichess / chess.com fetching + the scouting report
+      trainer.js    repertoire + SM-2 scheduling in localStorage
+    data/openings.json   generated from data/*.tsv
+  data/*.tsv        lichess-org/chess-openings dataset (MIT licensed)
+  scripts/
+    copy-engine.mjs     copies Stockfish into public/engine/ (runs automatically)
+    build-openings.mjs  regenerates src/data/openings.json from the TSVs
 ```
-
-Your repertoire and review schedule live in `backend/chess_coach.db` (a
-plain SQLite file) -- back it up if you want to keep your progress safe.
 
 ### A note on move classification
 
 There's no single official standard for "Brilliant" vs "Best" vs
-"Blunder" -- chess.com and lichess each use their own (unpublished, in
-chess.com's case) heuristics. This project uses lichess's public win%
-formula (`50 + 50 * (2/(1+e^-0.00368*cp) - 1)`) to convert Stockfish's
+"Blunder". chess.com and lichess each use their own heuristics, and
+chess.com doesn't publish its version. This project uses lichess's public
+win% formula (`50 + 50 * (2/(1+e^-0.00368*cp) - 1)`) to turn Stockfish's
 centipawn scores into a 0-100% win probability, then classifies each move
-by how much win% it gave up. "Brilliant" is a best-effort heuristic (best
-engine move + it looks like a material sacrifice) -- it'll be right most
-of the time but won't always agree with what chess.com would say about the
-exact same move.
+by how much win% it gave up. "Brilliant" is a best-effort heuristic: the
+best engine move that also looks like a material sacrifice. It's usually
+right, but it won't always match what chess.com says about the same move.
 
-### Extending it
+The browser engine is the "lite" Stockfish (a smaller neural network than
+desktop Stockfish), at depth 16 per move. It's far stronger than any human,
+but its evaluations can differ slightly from a full desktop Stockfish.
 
-Some natural next steps if you want to keep building on this:
-- Swap the rule-based commentary in `analysis.py` for something that calls
-  an LLM (e.g. the Claude API) with the position + engine lines, for richer
-  explanations.
-- Add a PyTorch position evaluator alongside Stockfish and compare the two
-  (this was on the original idea list -- skipped here to ship the core app
-  first, but `analysis.py` is the place to plug it in).
-- Deploy the backend somewhere reachable and point the frontend at it, so
-  you can use this from your phone.
+## Licenses
+
+- Stockfish / stockfish.js: GPLv3 (`frontend/public/engine/COPYING.txt` is
+  copied in at build time).
+- Opening data: lichess-org/chess-openings, MIT.

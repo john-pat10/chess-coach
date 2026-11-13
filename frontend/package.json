@@ -1,20 +1,24 @@
 {
-  "name": "frontend",
+  "name": "chess-coach",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-engine.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/copy-engine.mjs",
     "build": "vite build",
+    "preview": "vite preview",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "build:openings": "node scripts/build-openings.mjs"
   },
   "dependencies": {
     "chess.js": "^1.4.0",
     "react": "^19.2.8",
     "react-chessboard": "^5.12.1",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.3"
+    "react-router-dom": "^7.18.3",
+    "stockfish": "^19.0.1"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",

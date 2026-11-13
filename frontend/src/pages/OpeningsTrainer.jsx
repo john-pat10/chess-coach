@@ -233,6 +233,29 @@ function RepertoireManager({ refreshKey, onChanged }) {
     onChanged();
   }
 
+  function downloadBackup() {
+    const blob = new Blob([api.exportRepertoire()], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "chesscoach-repertoire.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function restoreBackup(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError(null);
+    try {
+      const added = await api.importRepertoire(await file.text());
+      setStatusMsg(`Restored ${added} line${added === 1 ? "" : "s"} from the backup.`);
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function removeLine(id) {
     await api.deleteRepertoireLine(id);
     onChanged();
@@ -296,7 +319,21 @@ function RepertoireManager({ refreshKey, onChanged }) {
       </div>
 
       <div className="panel mt-2">
-        <div className="section-title">Your repertoire ({lines.length})</div>
+        <div className="flex-row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+          <div className="section-title">Your repertoire ({lines.length})</div>
+          <div className="flex-row">
+            <button className="btn-secondary btn" onClick={downloadBackup} disabled={!lines.length}>
+              Download backup
+            </button>
+            <label className="btn-secondary btn" style={{ cursor: "pointer" }}>
+              Restore backup
+              <input type="file" accept="application/json,.json" onChange={restoreBackup} hidden />
+            </label>
+          </div>
+        </div>
+        <div className="hint" style={{ marginBottom: 8 }}>
+          Your repertoire is saved in this browser. Download a backup to move it to another device.
+        </div>
         {lines.length === 0 ? (
           <div className="hint">Nothing yet -- search above, or add lines from the Opponent Scout page.</div>
         ) : (

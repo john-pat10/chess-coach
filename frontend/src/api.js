@@ -1,61 +1,49 @@
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+// Everything runs in the browser now -- no backend server. This module keeps
+// the same `api` shape the pages were written against, backed by:
+//   lib/engine.js   -- Stockfish (WASM) in a Web Worker
+//   lib/analysis.js -- game review
+//   lib/opponent.js -- Lichess / chess.com scouting
+//   lib/openings.js -- the bundled opening book
+//   lib/trainer.js  -- repertoire + spaced repetition in localStorage
+import { Engine } from "./lib/engine.js";
+import { analyzeGame } from "./lib/analysis.js";
+import { buildScoutingReport } from "./lib/opponent.js";
+import * as book from "./lib/openings.js";
+import * as trainer from "./lib/trainer.js";
 
-async function request(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-    } catch {
-      /* ignore parse errors */
-    }
-    throw new Error(detail);
-  }
-  if (res.status === 204) return null;
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
+let reviewEngine = null;
+function getReviewEngine() {
+  reviewEngine ??= new Engine();
+  return reviewEngine;
 }
 
 export const api = {
-  analyze: (pgn, depth = 14, criticalDepth = 18) =>
-    request("/api/analyze", {
-      method: "POST",
-      body: JSON.stringify({ pgn, depth, critical_depth: criticalDepth }),
-    }),
+  analyze: (pgn, { depth = 16, criticalDepth = 20, onProgress } = {}) =>
+    analyzeGame(getReviewEngine(), pgn, { depth, criticalDepth, onProgress }),
 
   scoutOpponent: (platform, username, maxGames = 100) =>
-    request(
-      `/api/opponent/${platform}/${encodeURIComponent(username)}?max_games=${maxGames}`
-    ),
+    buildScoutingReport(platform, username, Math.max(5, Math.min(500, maxGames))),
 
-  openingsTree: (movesUci = []) =>
-    request(`/api/openings/tree?moves=${movesUci.join(",")}`),
+  openingsTree: async (movesUci = []) => {
+    const node = book.nodeAt(movesUci);
+    if (!node) throw new Error("No opening line matches those moves.");
+    return node;
+  },
 
-  openingsSearch: (q, limit = 60) =>
-    request(`/api/openings/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  openingsSearch: async (q, limit = 60) => book.search(q, limit),
 
-  openingsLine: (eco, name) =>
-    request(`/api/openings/line?eco=${encodeURIComponent(eco)}&name=${encodeURIComponent(name)}`),
+  openingsLine: async (eco, name) => {
+    const moves = book.movesFor(eco, name);
+    if (!moves) throw new Error("Unknown opening.");
+    return { eco, name, moves: trainer.uciMovesToLine(moves) };
+  },
 
-  listRepertoire: () => request("/api/repertoire"),
-
-  addRepertoireLine: (line) =>
-    request("/api/repertoire", { method: "POST", body: JSON.stringify(line) }),
-
-  deleteRepertoireLine: (id) =>
-    request(`/api/repertoire/${id}`, { method: "DELETE" }),
-
-  trainerSummary: () => request("/api/trainer/summary"),
-
-  trainerNext: () => request("/api/trainer/next"),
-
-  trainerAttempt: (lineId, result) =>
-    request("/api/trainer/attempt", {
-      method: "POST",
-      body: JSON.stringify({ line_id: lineId, result }),
-    }),
+  listRepertoire: async () => trainer.listLines(),
+  addRepertoireLine: async (line) => trainer.addLine(line),
+  deleteRepertoireLine: async (id) => trainer.deleteLine(id),
+  trainerSummary: async () => trainer.summary(),
+  trainerNext: async () => trainer.nextDue(),
+  trainerAttempt: async (lineId, result) => trainer.recordAttempt(lineId, result),
+  exportRepertoire: () => trainer.exportRepertoire(),
+  importRepertoire: async (text) => trainer.importRepertoire(text),
 };

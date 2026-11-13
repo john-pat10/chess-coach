@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import GameReview from "./pages/GameReview.jsx";
 import OpponentScout from "./pages/OpponentScout.jsx";
 import OpeningsTrainer from "./pages/OpeningsTrainer.jsx";
+import AnalysisBoard from "./pages/AnalysisBoard.jsx";
 
 export default function App() {
   return (
@@ -14,6 +15,9 @@ export default function App() {
           <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
             Game Review
           </NavLink>
+          <NavLink to="/analysis" className={({ isActive }) => (isActive ? "active" : "")}>
+            Analysis Board
+          </NavLink>
           <NavLink to="/scout" className={({ isActive }) => (isActive ? "active" : "")}>
             Opponent Scout
           </NavLink>
@@ -25,6 +29,7 @@ export default function App() {
       <main className="page">
         <Routes>
           <Route path="/" element={<GameReview />} />
+          <Route path="/analysis" element={<AnalysisBoard />} />
           <Route path="/scout" element={<OpponentScout />} />
           <Route path="/trainer" element={<OpeningsTrainer />} />
         </Routes>

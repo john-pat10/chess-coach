@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Board from "../components/Board.jsx";
 import EvalBar from "../components/EvalBar.jsx";
 import { api } from "../api.js";
@@ -18,13 +19,26 @@ export default function GameReview() {
   const [ply, setPly] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [progress, setProgress] = useState(null);
+  const navigate = useNavigate();
+
+  function openInAnalysis() {
+    sessionStorage.setItem(
+      "chesscoach.analysis.import",
+      JSON.stringify({ pgn: pgnText, ply })
+    );
+    navigate("/analysis");
+  }
 
   async function handleAnalyze(e) {
     e?.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      const data = await api.analyze(pgnText);
+      setProgress({ done: 0, total: 1 });
+      const data = await api.analyze(pgnText, {
+        onProgress: (done, total) => setProgress({ done, total }),
+      });
       setResult(data);
       setPly(0);
     } catch (err) {
@@ -32,6 +46,7 @@ export default function GameReview() {
       setResult(null);
     } finally {
       setLoading(false);
+      setProgress(null);
     }
   }
 
@@ -47,7 +62,7 @@ export default function GameReview() {
     return () => window.removeEventListener("keydown", onKey);
   }, [result, maxPly]);
 
-  const fen = result ? (ply === 0 ? START_FEN : result.moves[ply - 1].fen_after) : START_FEN;
+  const fen = result ? (ply === 0 ? result.start_fen : result.moves[ply - 1].fen_after) : START_FEN;
   const cp = result ? result.eval_graph_white_cp[ply] : 0;
   const currentMove = result && ply > 0 ? result.moves[ply - 1] : null;
 
@@ -91,9 +106,16 @@ export default function GameReview() {
             <button className="btn" type="submit" disabled={loading}>
               {loading ? <span className="spinner" /> : "Analyze game"}
             </button>
-            <span className="hint">
-              Runs Stockfish locally -- a full game usually takes a few seconds to a minute.
-            </span>
+            {progress ? (
+              <span className="hint">
+                Analyzing position {Math.min(progress.done + 1, progress.total)} of {progress.total}
+                {progress.done >= progress.total ? " -- checking the critical moments..." : "..."}
+              </span>
+            ) : (
+              <span className="hint">
+                Stockfish runs right in your browser -- a full game usually takes under a minute.
+              </span>
+            )}
           </div>
         </form>
         {error && <div className="error-box mt-1">{error}</div>}
@@ -111,6 +133,7 @@ export default function GameReview() {
               <button className="btn-secondary btn" onClick={() => setPly((p) => Math.max(0, p - 1))}>◀</button>
               <button className="btn-secondary btn" onClick={() => setPly((p) => Math.min(maxPly, p + 1))}>▶</button>
               <button className="btn-secondary btn" onClick={() => setPly(maxPly)}>▶|</button>
+              <button className="btn" onClick={openInAnalysis}>Analysis board</button>
             </div>
 
             <div className="panel mt-2">
