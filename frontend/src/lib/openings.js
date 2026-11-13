@@ -66,17 +66,177 @@ export function movesFor(eco, name) {
   return byKey.get(`${eco}|${name}`) ?? null;
 }
 
-export function search(query, limit = 25) {
-  const q = query.toLowerCase().trim();
-  if (!q) return [];
-  const out = [];
-  for (const o of allNamed) {
-    if (o.name.toLowerCase().includes(q)) {
-      out.push({ eco: o.eco, name: o.name });
-      if (out.length >= limit) break;
+// ---------------------------------------------------------------- search
+
+// Lowercase, drop accents and apostrophes ("Queen's" -> "queens"), and turn
+// all other punctuation into spaces, so "queens gambit", "Queen's Gambit" and
+// "queen's-gambit" all look the same.
+function normalize(text) {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/['\u2019`]/g, "")
+    .replace(/[^a-z0-9+#=]+/g, " ")
+    .trim();
+}
+
+// Common shorthand people type, expanded before matching.
+const ALIASES = {
+  qgd: "queens gambit declined",
+  qga: "queens gambit accepted",
+  qg: "queens gambit",
+  kid: "kings indian defense",
+  kia: "kings indian attack",
+  qid: "queens indian defense",
+  ruy: "ruy lopez",
+  spanish: "ruy lopez",
+  sicilian: "sicilian defense",
+  french: "french defense",
+  caro: "caro kann",
+  carokann: "caro kann",
+  scandi: "scandinavian",
+  grunfeld: "grunfeld",
+  gruenfeld: "grunfeld",
+  london: "london system",
+  italian: "italian game",
+  scotch: "scotch game",
+  defence: "defense",
+};
+
+// Edit distance capped at 2, used for typo tolerance on longer words.
+function within(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return false;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      rowMin = Math.min(rowMin, cur[j]);
     }
+    if (rowMin > max) return false;
+    prev = cur;
   }
-  return out;
+  return prev[b.length] <= max;
+}
+
+// How well one query word matches the words of a name: 3 exact, 2 prefix,
+// 1 typo, 0 no match.
+function wordScore(q, words) {
+  let best = 0;
+  for (const w of words) {
+    if (w === q) return 3;
+    if (w.startsWith(q)) best = Math.max(best, 2);
+    else if (best < 1 && q.length >= 4 && within(q, w.slice(0, q.length + 1), q.length >= 7 ? 2 : 1)) best = 1;
+  }
+  return best;
+}
+
+// Per-opening search fields, built once on first search.
+let searchIndex = null;
+function getSearchIndex() {
+  if (searchIndex) return searchIndex;
+  searchIndex = allNamed.map((o) => {
+    const norm = normalize(o.name);
+    const [familyName, ...rest] = o.name.split(":");
+    const family = normalize(familyName);
+    const variation = normalize(rest.join(" "));
+    let san = null; // filled lazily for move searches
+    return { o, norm, words: norm.split(" "), family, familyWords: family.split(" "), variation, get san() {
+      if (san === null) {
+        const chess = new Chess();
+        san = o.ucis.map((u) => normalize(chess.move(uciToMove(u)).san)).join(" ");
+      }
+      return san;
+    } };
+  });
+  return searchIndex;
+}
+
+// Result row: name, ECO and the line in readable notation ("1. d4 d5 2. c4").
+function toResult(e) {
+  const chess = new Chess();
+  const parts = [];
+  e.o.ucis.forEach((u, i) => {
+    const san = chess.move(uciToMove(u)).san;
+    parts.push(i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san);
+  });
+  return { eco: e.o.eco, name: e.o.name, moves: parts.join(" ") };
+}
+
+const MOVE_TOKEN = /^(\d+\.*)?([kqrbn]?[a-h]?[1-8]?x?[a-h][1-8](=?[qrbn])?|o-o(-o)?|0-0(-0)?)[+#]?$/i;
+
+/**
+ * Search named openings. Understands:
+ *  - names in any word order, with or without apostrophes/accents, small typos
+ *    ("queens gambit", "dragon sicilian", "najdrof")
+ *  - shorthand like QGD, KID, Ruy, Caro
+ *  - ECO codes ("B33")
+ *  - move sequences ("1. e4 c5 2. Nf3 d6", "d4 d5 c4")
+ * Results are ranked: closest name matches first, and within a family the
+ * main line before its sub-variations.
+ */
+export function search(query, limit = 300) {
+  const raw = query.trim();
+  if (!raw) return [];
+  const index = getSearchIndex();
+
+  // ECO code, e.g. "C42". (One digit would clash with moves like "e4".)
+  if (/^[a-e]\d\d$/i.test(raw)) {
+    const code = raw.toUpperCase();
+    return index
+      .filter((e) => e.o.eco.startsWith(code))
+      .sort((a, b) => a.o.eco.localeCompare(b.o.eco) || a.o.ucis.length - b.o.ucis.length)
+      .slice(0, limit)
+      .map(toResult);
+  }
+
+  // Move sequence: every token looks like a move or a move number.
+  const tokens = raw.replace(/\.(?=\S)/g, ". ").split(/\s+/).filter((t) => !/^\d+\.*$/.test(t));
+  if (tokens.length && tokens.every((t) => MOVE_TOKEN.test(t))) {
+    const want = tokens.map((t) => normalize(t.replace(/^\d+\.*/, "").replace(/0/g, "o"))).join(" ");
+    return index
+      .filter((e) => e.san === want || e.san.startsWith(want + " "))
+      .sort((a, b) => a.o.ucis.length - b.o.ucis.length)
+      .slice(0, limit)
+      .map(toResult);
+  }
+
+  // Name search.
+  let q = normalize(raw);
+  q = q.split(" ").map((w) => ALIASES[w] ?? w).join(" ");
+  const qWords = q.split(" ").filter(Boolean);
+  const scored = [];
+  for (const e of index) {
+    let total = 0;
+    let ok = true;
+    for (const w of qWords) {
+      const s = wordScore(w, e.words);
+      if (!s) { ok = false; break; }
+      total += s;
+    }
+    if (!ok) continue;
+    // Bonuses: the whole phrase appears in order, it names the family itself.
+    if (e.norm.includes(q)) total += 4;
+    if (e.family.startsWith(q)) total += 4;
+    if (e.family === q) total += 3;
+    // Every query word that names part of the family counts (typos included),
+    // so "sicilan dragon" ranks Sicilian lines above "Franco-Sicilian" ones.
+    if (qWords.some((w) => wordScore(w, e.familyWords))) {
+      total += 3 * qWords.filter((w) => wordScore(w, e.familyWords)).length;
+    }
+    // A query word that starts the variation name ("Dragon Variation").
+    if (e.variation && qWords.some((w) => !wordScore(w, e.familyWords) && (e.variation.startsWith(w + " ") || e.variation === w))) total += 2;
+    scored.push({ e, total });
+  }
+  scored.sort((a, b) =>
+    b.total - a.total ||
+    a.e.family.localeCompare(b.e.family) ||
+    a.e.o.ucis.length - b.e.o.ucis.length ||
+    a.e.o.name.localeCompare(b.e.o.name)
+  );
+  return scored.slice(0, limit).map(({ e }) => toResult(e));
 }
 
 // ---------------------------------------------------------------- position index

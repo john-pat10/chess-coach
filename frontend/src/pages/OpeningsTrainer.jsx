@@ -167,7 +167,7 @@ function RepertoireManager({ refreshKey, onChanged }) {
     if (query.trim().length < 2) return;
     setStatusMsg(null);
     try {
-      setResults(await api.openingsSearch(query.trim(), 100));
+      setResults(await api.openingsSearch(query.trim(), 300));
     } catch (e) {
       setError(e.message);
     }
@@ -267,7 +267,7 @@ function RepertoireManager({ refreshKey, onChanged }) {
         <div className="section-title">Add an opening to drill</div>
         <form onSubmit={search} className="flex-row">
           <input
-            placeholder="Search openings, e.g. 'Sicilian Defense: Dragon' for every Dragon line"
+            placeholder="Search by name, ECO code or moves, e.g. 'queens gambit', 'B33', '1. e4 c5'"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{ flex: 1 }}
@@ -275,9 +275,9 @@ function RepertoireManager({ refreshKey, onChanged }) {
           <button className="btn" type="submit">Search</button>
         </form>
         <div className="hint mt-1">
-          Tip: search a whole family like "Sicilian Defense: Dragon" or "Caro-Kann" to get every
-          named variation under it, then use "Add all" below to drop the whole tree into your
-          repertoire in one go instead of adding lines one at a time.
+          Search by name (typos and word order are fine, and shorthand like QGD or KID works), by
+          ECO code like "B33", or by moves like "1. e4 c5 2. Nf3". Use "Add all" to drop every
+          result into your repertoire at once. Openings come from the Lichess opening database.
         </div>
         {results.length > 0 && (
           <div className="flex-row mt-1" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
@@ -301,7 +301,10 @@ function RepertoireManager({ refreshKey, onChanged }) {
             <tbody>
               {results.map((r) => (
                 <tr key={`${r.eco}-${r.name}`}>
-                  <td>{r.name} <span className="hint">{r.eco}</span></td>
+                  <td>
+                    {r.name} <span className="hint">{r.eco}</span>
+                    {r.moves && <div className="hint" style={{ fontSize: "0.82rem" }}>{r.moves}</div>}
+                  </td>
                   <td style={{ textAlign: "right" }}>
                     <button className="btn-secondary btn" disabled={busy} onClick={() => addOpening(r.eco, r.name, "white")}>
                       + White
