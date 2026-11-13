@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import Board from "../components/Board.jsx";
 import { api } from "../api.js";
 
@@ -380,7 +381,12 @@ export default function OpeningsTrainer() {
   return (
     <div className="flex-col">
       <div className="panel">
-        <div className="section-title">Practice</div>
+        <div className="flex-row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+          <div className="section-title">Practice</div>
+          <Link to="/punish" className="hint">
+            Know the moves? Learn how to punish your opponents' mistakes in these openings →
+          </Link>
+        </div>
         <PracticePanel key={refreshKey} onRepertoireChanged={bump} />
       </div>
       <div className="mt-2">

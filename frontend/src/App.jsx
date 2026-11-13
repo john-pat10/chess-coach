@@ -3,6 +3,7 @@ import GameReview from "./pages/GameReview.jsx";
 import OpponentScout from "./pages/OpponentScout.jsx";
 import OpeningsTrainer from "./pages/OpeningsTrainer.jsx";
 import AnalysisBoard from "./pages/AnalysisBoard.jsx";
+import PunishMistakes from "./pages/PunishMistakes.jsx";
 
 export default function App() {
   return (
@@ -24,6 +25,9 @@ export default function App() {
           <NavLink to="/trainer" className={({ isActive }) => (isActive ? "active" : "")}>
             Openings Trainer
           </NavLink>
+          <NavLink to="/punish" className={({ isActive }) => (isActive ? "active" : "")}>
+            Punish Mistakes
+          </NavLink>
         </nav>
       </header>
       <main className="page">
@@ -32,6 +36,7 @@ export default function App() {
           <Route path="/analysis" element={<AnalysisBoard />} />
           <Route path="/scout" element={<OpponentScout />} />
           <Route path="/trainer" element={<OpeningsTrainer />} />
+          <Route path="/punish" element={<PunishMistakes />} />
         </Routes>
       </main>
     </div>

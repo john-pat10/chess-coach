@@ -10,8 +10,12 @@ async function fetchLichess(username, maxGames) {
   let res;
   try {
     res = await fetch(url, { headers: { Accept: "application/x-chess-pgn" } });
-  } catch (e) {
-    throw new Error(`Could not reach Lichess: ${e.message}`);
+  } catch {
+    throw new Error(
+      "Couldn't connect to lichess.org. If lichess.org doesn't open in your browser either, " +
+        "this network is blocking it (common on school or work Wi-Fi) or Lichess is down -- " +
+        "try another network, or scout on chess.com instead."
+    );
   }
   if (res.status === 404) throw new Error(`No Lichess account found for '${username}'.`);
   if (res.status === 429) throw new Error("Lichess rate-limited this request -- wait a minute and try again.");
@@ -24,8 +28,11 @@ async function fetchChesscom(username, maxGames) {
   let res;
   try {
     res = await fetch(base);
-  } catch (e) {
-    throw new Error(`Could not reach chess.com: ${e.message}`);
+  } catch {
+    throw new Error(
+      "Couldn't connect to chess.com. If chess.com doesn't open in your browser either, " +
+        "this network is blocking it or chess.com is down -- try another network."
+    );
   }
   if (res.status === 404) throw new Error(`No chess.com account found for '${username}'.`);
   if (!res.ok) throw new Error(`chess.com returned an error (${res.status}).`);
